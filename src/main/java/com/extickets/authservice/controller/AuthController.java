@@ -1,0 +1,67 @@
+package com.extickets.authservice.controller;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.jackson2.JacksonFactory;
+
+@RestController
+@RequestMapping("/auth")
+@CrossOrigin(origins = {"http://localhost:3000", "http://192.168.29.94:3000"}, allowCredentials = "true")
+public class AuthController {
+
+    private static final String GOOGLE_CLIENT_ID = "464546863135-1991ht6skloqe2dapfj53k61k2cmj0h3.apps.googleusercontent.com";
+
+    @PostMapping("/google")
+    public ResponseEntity<?> googleAuth(@RequestBody Map<String, String> body) {
+        String token = body.get("idToken");
+        System.out.println("Token is here" + token);
+        try {
+            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
+                    new NetHttpTransport(),
+                    JacksonFactory.getDefaultInstance())
+                    .setAudience(Collections.singletonList(GOOGLE_CLIENT_ID))
+                    .build();
+
+            GoogleIdToken idToken = verifier.verify(token);
+            if (idToken != null) {
+                GoogleIdToken.Payload payload = idToken.getPayload();
+
+                String email = payload.getEmail();
+                String name = (String) payload.get("name");
+
+                // Add to Spring Security Context manually
+                User springUser = new User(email, "", List.of()); // empty authorities
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(springUser, null, springUser.getAuthorities());
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                System.out.println("Authenticated users with email : " + email +" Name: "+name);
+
+                return ResponseEntity.ok(Map.of("user", Map.of(
+                    "email", email,
+                    "name", name
+                )));
+            } else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid ID token.");
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Token verification failed");
+        }
+    }
+}
