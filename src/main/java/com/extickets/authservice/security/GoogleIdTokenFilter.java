@@ -57,4 +57,7 @@ public class GoogleIdTokenFilter extends OncePerRequestFilter {
 
 		filterChain.doFilter(request, response);
 	}
+	protected GoogleIdToken verifyToken(String token) throws Exception {
+	    return verifier.verify(token);
+	}
 }
